@@ -301,11 +301,11 @@ const features = {
 
 ## 📚 Documentation
 
-- [Architecture Guide](docs/ARCHITECTURE.md)
-- [Security Documentation](SECURITY.md)
-- [Deployment Guide](docs/DEPLOYMENT.md)
-- [API Reference](docs/API.md)
-- [KIRO Blog Post](docs/kiro-blog-post.md)
+- [KIRO Blog Post (Live)](https://builder.aws.com/content/374QOQ4ilDAVH0a9Z8vi5UNSxpP/retro-revival-building-an-ai-powered-tetris-game-with-kiro-and-strands-agents)
+- [Project Specifications](.kiro/specs/)
+- [Security Policy](SECURITY.md)
+- [Architecture & Steering](.kiro/steering/)
+- [License](LICENSE.md)
 
 ## 🤝 Contributing
 
@@ -335,7 +335,7 @@ This project was built for the AWS Builder Center KIRO Challenge, demonstrating:
 - **AI Integration**: Intelligent gameplay assistance
 
 ### Blog Post
-Read the full implementation story: [Building a Multi-Agent Tetris AI with Strands](docs/kiro-blog-post.md)
+Read the full implementation story: [Retro Revival: Building an AI-Powered Tetris Game with KIRO and Strands Agents](https://builder.aws.com/content/374QOQ4ilDAVH0a9Z8vi5UNSxpP/retro-revival-building-an-ai-powered-tetris-game-with-kiro-and-strands-agents)
 
 ---
 
