@@ -1,0 +1,88 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Environment variables - NEVER commit secrets!
+.env
+.env.local
+.env.*.local
+.env.aws
+.env.gcp
+.env.vercel
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.vercel/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.jest/
+test-results/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Cloud provider specific
+.aws/
+.gcp/
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# Secrets baseline (keep this)
+!.secrets.baseline
+
+# Local development
+.cache/
+.parcel-cache/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Replay files (too large for git)
+replays/*.json
+
+# AI model files
+models/*.bin
+models/*.h5
+
+# Backup files
+*.bak
+*.backup
+
+# Blog post (excluded per user request)
+docs/kiro-blog-post.md

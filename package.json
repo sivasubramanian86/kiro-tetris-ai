@@ -1,0 +1,88 @@
+{
+  "type": "module",
+  "name": "kiro-tetris-ai",
+  "version": "1.0.0",
+  "description": "KIRO Tetris AI - Multi-agent Tetris game with Strands framework and multi-cloud deployment",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/ agents/ config/",
+    "lint:fix": "eslint src/ agents/ config/ --fix",
+    "security:scan": "npm audit",
+    "security:lint": "eslint --config .eslintrc.security.js src/ agents/",
+    "pre-commit": "npm run lint && npm run security:scan && npm test",
+    "build": "webpack --mode production",
+    "deploy:aws": "sam deploy --guided",
+    "deploy:gcp": "gcloud functions deploy tetris-game --runtime nodejs18",
+    "deploy:vercel": "vercel --prod",
+    "docs": "jsdoc -c jsdoc.json"
+  },
+  "keywords": [
+    "tetris",
+    "ai",
+    "strands",
+    "multi-agent",
+    "aws",
+    "kiro",
+    "game"
+  ],
+  "author": "KIRO Challenge Participant",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.450.0",
+    "@aws-sdk/client-dynamodb": "^3.450.0",
+    "@aws-sdk/client-s3": "^3.450.0",
+    "@aws-sdk/client-secrets-manager": "^3.450.0",
+    "@google-cloud/aiplatform": "^3.9.0",
+    "@google-cloud/firestore": "^7.1.0",
+    "@google-cloud/pubsub": "^4.1.0",
+    "@google-cloud/secret-manager": "^5.0.0",
+    "@google-cloud/storage": "^7.7.0",
+    "@vercel/blob": "^2.0.0",
+    "@vercel/kv": "^1.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "process": "^0.11.10",
+    "rate-limiter-flexible": "^4.0.0",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.10",
+    "@types/node": "^20.10.0",
+    "eslint": "^8.54.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-security": "^1.7.1",
+    "jest": "^29.7.0",
+    "jsdoc": "^4.0.2",
+    "nodemon": "^3.0.2",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coverageThreshold": {
+      "global": {
+        "branches": 14,
+        "functions": 20,
+        "lines": 19,
+        "statements": 19
+      }
+    },
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "agents/**/*.js",
+      "config/**/*.js",
+      "!**/node_modules/**"
+    ]
+  }
+}

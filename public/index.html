@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KIRO Tetris AI - Multi-Agent Game</title>
+    <meta name="description" content="AI-powered Tetris game built with Strands multi-agent framework">
+    <meta name="keywords" content="tetris, ai, strands, multi-agent, kiro, aws">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+
+    <!-- Styles -->
+    <style>
+        /* Win95 Theme Styles */
+        :root {
+            --win95-gray: #c0c0c0;
+            --win95-dark-gray: #808080;
+            --win95-light-gray: #dfdfdf;
+            --win95-blue: #0000ff;
+            --win95-white: #ffffff;
+            --win95-black: #000000;
+            --win95-red: #ff0000;
+            --win95-green: #008000;
+        }
+
+        /* Dark Theme Variables */
+        :root[data-theme="dark"] {
+            --win95-gray: #2d2d30;
+            --win95-dark-gray: #1e1e1e;
+            --win95-light-gray: #3e3e42;
+            --win95-blue: #0078d4;
+            --win95-white: #ffffff;
+            --win95-black: #1e1e1e;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'MS Sans Serif', sans-serif;
+            font-size: 14px;
+            background: var(--win95-gray);
+            color: var(--win95-black);
+            transition: all 0.3s ease;
+        }
+
+        .theme-dark {
+            background: var(--win95-dark-gray);
+            color: var(--win95-white);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .game-layout {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .left-panel,
+        .right-panel {
+            min-width: 220px;
+            max-width: 220px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .game-area {
+            display: flex;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .game-canvas {
+            border: 2px inset var(--win95-gray);
+            background: var(--win95-black);
+        }
+
+        .ui-canvas {
+            border: 2px inset var(--win95-gray);
+            background: var(--win95-gray);
+        }
+
+        .control-panel {
+            min-width: 200px;
+        }
+
+        .panel {
+            border: 2px outset var(--win95-gray);
+            background: var(--win95-gray);
+            margin-bottom: 10px;
+            padding: 8px;
+        }
+
+        .panel-title {
+            background: var(--win95-blue);
+            color: var(--win95-white);
+            padding: 4px 8px;
+            margin: -8px -8px 8px -8px;
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        .button {
+            border: 2px outset var(--win95-gray);
+            background: var(--win95-gray);
+            padding: 6px 12px;
+            font-family: 'MS Sans Serif', sans-serif;
+            font-size: 13px;
+            cursor: pointer;
+            margin: 4px 0;
+            min-width: 80px;
+            width: 100%;
+        }
+
+        .button:active {
+            border: 2px inset var(--win95-gray);
+        }
+
+        .button:hover {
+            background: var(--win95-light-gray);
+        }
+
+        .score-display {
+            background: var(--win95-white);
+            border: 2px inset var(--win95-gray);
+            padding: 6px 8px;
+            margin: 6px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            font-weight: bold;
+            text-align: right;
+        }
+
+        .theme-dark .score-display {
+            background: var(--win95-black);
+            color: var(--win95-white);
+        }
+
+        .status-bar {
+            border: 1px inset var(--win95-gray);
+            padding: 2px 6px;
+            margin-top: 10px;
+            font-size: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .next-pieces {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .next-piece-preview {
+            border: 1px inset var(--win95-gray);
+            background: var(--win95-black);
+        }
+
+        .controls-help {
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .ai-panel {
+            border: 2px outset var(--win95-gray);
+            background: var(--win95-gray);
+            padding: 8px;
+            margin-top: 10px;
+        }
+
+        .ai-confidence {
+            background: var(--win95-white);
+            border: 2px inset var(--win95-gray);
+            padding: 6px 8px;
+            margin: 6px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .theme-dark .ai-confidence {
+            background: var(--win95-black);
+            color: var(--win95-white);
+        }
+
+        .high-scores {
+            font-size: 12px;
+            line-height: 1.8;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .dialog-box {
+            border: 2px outset var(--win95-gray);
+            background: var(--win95-gray);
+            padding: 16px;
+            min-width: 300px;
+            max-width: 500px;
+        }
+
+        .dialog-content {
+            margin-bottom: 16px;
+        }
+
+        .dialog-buttons {
+            text-align: right;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            color: var(--win95-blue);
+        }
+
+        .header p {
+            margin: 5px 0;
+            font-size: 12px;
+        }
+
+        @media (max-width: 1200px) {
+            .game-layout {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .left-panel,
+            .right-panel {
+                max-width: 100%;
+                width: 100%;
+            }
+
+            .game-area {
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .game-area {
+                justify-content: center;
+            }
+
+            .game-canvas,
+            .ui-canvas {
+                transform: scale(0.8);
+            }
+        }
+
+        /* Animation keyframes */
+        @keyframes fadeInOut {
+            0% {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+
+            50% {
+                opacity: 1;
+                transform: scale(1.1);
+            }
+
+            100% {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+        }
+
+        .level-up-notification {
+            animation: fadeInOut 2s ease-in-out;
+        }
+
+        /* Loading spinner */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid var(--win95-gray);
+            border-radius: 50%;
+            border-top-color: var(--win95-blue);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        /* Dialogs */
+        .dialog-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .dialog-box {
+            background: var(--win95-gray);
+            border: 2px outset var(--win95-gray);
+            padding: 8px;
+            min-width: 300px;
+            box-shadow: 2px 2px 0 var(--win95-black);
+        }
+
+        .dialog-content {
+            padding: 20px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .dialog-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body class="theme-win95">
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🎮 KIRO Tetris AI</h1>
+            <p>Multi-Agent Strands Architecture | AWS Builder Center Challenge</p>
+        </div>
+
+        <!-- Main Game Layout: Controls Left, Game Center, Scoreboard Right -->
+        <div class="game-layout">
+            <!-- Left Panel: Game Controls -->
+            <div class="left-panel">
+                <!-- Game Controls -->
+                <div class="panel">
+                    <div class="panel-title">Game Controls</div>
+                    <button id="startBtn" class="button">Start Game</button>
+                    <button id="pauseBtn" class="button">Pause</button>
+                    <button id="restartBtn" class="button">Restart</button>
+                    <button id="themeToggle" class="button">Dark Mode</button>
+                </div>
+
+                <!-- AI Panel -->
+                <div class="panel">
+                    <div class="panel-title">AI Assistant</div>
+                    <div>Confidence: <div id="aiConfidence" class="ai-confidence">--</div>
+                    </div>
+                    <button id="aiHintBtn" class="button">Get Hint</button>
+                    <button id="aiToggleBtn" class="button">Toggle AI</button>
+                </div>
+
+                <!-- Controls Help -->
+                <div class="panel">
+                    <div class="panel-title">Controls</div>
+                    <div class="controls-help">
+                        <strong>Keyboard:</strong><br>
+                        ← → Move left/right<br>
+                        ↓ Soft drop<br>
+                        ↑ Rotate piece<br>
+                        Space Hard drop<br>
+                        P Pause game<br>
+                        F1 Toggle theme<br>
+                        R Restart game
+                    </div>
+                </div>
+
+                <!-- Replay Controls -->
+                <div class="panel">
+                    <div class="panel-title">Replay System</div>
+                    <button id="replayBtn" class="button">View Replay</button>
+                    <button id="saveReplayBtn" class="button">Save Replay</button>
+                    <div id="replayProgress" style="margin-top: 8px;">
+                        <!-- Replay progress bar will be here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center: Game Canvas -->
+            <div class="game-area">
+                <canvas id="gameCanvas" class="game-canvas" width="300" height="600"></canvas>
+                <canvas id="uiCanvas" class="ui-canvas" width="200" height="600"></canvas>
+            </div>
+
+            <!-- Right Panel: Scoreboard -->
+            <div class="right-panel">
+                <!-- Score Panel -->
+                <div class="panel">
+                    <div class="panel-title">Score</div>
+                    <div>Score: <div id="score" class="score-display">0</div>
+                    </div>
+                    <div>Level: <div id="level" class="score-display">1</div>
+                    </div>
+                    <div>Lines: <div id="lines" class="score-display">0</div>
+                    </div>
+                </div>
+
+                <!-- Next Pieces -->
+                <div class="panel">
+                    <div class="panel-title">Next Pieces</div>
+                    <div id="nextPieces" class="next-pieces">
+                        <!-- Next piece previews will be rendered here -->
+                    </div>
+                </div>
+
+                <!-- High Scores -->
+                <div class="panel">
+                    <div class="panel-title">High Scores</div>
+                    <div id="highScores" class="high-scores">
+                        <!-- High scores will be displayed here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <span id="gameState">Initializing...</span>
+        <span id="fps">-- FPS</span>
+        <span id="agentStatus">Agents: <span class="loading"></span></span>
+    </div>
+
+    <!-- Game Over Dialog -->
+    <div id="gameOverDialog" class="dialog-overlay">
+        <div class="dialog-box">
+            <div class="panel-title">Game Over</div>
+            <div class="dialog-content">
+                <p>Final Score: <span id="finalScore">0</span></p>
+                <p>Congratulations on your game!</p>
+            </div>
+            <div class="dialog-buttons">
+                <button class="button"
+                    onclick="document.getElementById('gameOverDialog').style.display='none'">Close</button>
+                <button class="button" onclick="window.tetrisApp?.restart()">Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Suggestion Dialog -->
+    <div id="aiSuggestionDialog" class="dialog-overlay">
+        <div class="dialog-box">
+            <div class="panel-title">AI Suggestion</div>
+            <div class="dialog-content">
+                <p id="aiSuggestionText">The AI suggests...</p>
+                <p>Confidence: <span id="aiSuggestionConfidence">--</span></p>
+            </div>
+            <div class="dialog-buttons">
+                <button class="button"
+                    onclick="document.getElementById('aiSuggestionDialog').style.display='none'">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // Global app reference
+        window.tetrisApp = null;
+
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // Update status
+                document.getElementById('gameState').textContent = 'Loading...';
+
+                // Load the main application
+                const { TetrisApp } = await import('./bundle.js?v=' + Date.now());
+
+                // Initialize app
+                window.tetrisApp = new TetrisApp();
+                await window.tetrisApp.initialize();
+
+                // Update status
+                document.getElementById('gameState').textContent = 'Ready';
+                document.getElementById('agentStatus').innerHTML = 'Agents: ✅ Ready';
+
+                console.log('🎮 KIRO Tetris AI loaded successfully!');
+
+            } catch (error) {
+                console.error('❌ Failed to load KIRO Tetris AI:', error);
+                document.getElementById('gameState').textContent = 'Error';
+                document.getElementById('agentStatus').innerHTML = 'Agents: ❌ Failed';
+                // Show error dialog
+                alert('Failed to load the game. Please refresh the page and try again.');
+            }
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'F1') {
+                event.preventDefault();
+                if (window.tetrisApp && window.tetrisApp.gameController) {
+                    window.tetrisApp.gameController.toggleTheme();
+                }
+            }
+        });
+
+        // Performance monitoring
+        setInterval(() => {
+            if (window.tetrisApp && window.tetrisApp.orchestrator) {
+                // Update agent status
+                window.tetrisApp.orchestrator.performHealthChecks().then(health => {
+                    const healthyCount = Object.values(health).filter(h => h.status === 'healthy').length;
+                    const totalCount = Object.keys(health).length;
+                    document.getElementById('agentStatus').innerHTML = `Agents: ${healthyCount}/${totalCount} ✅`;
+                }).catch(() => {
+                    document.getElementById('agentStatus').innerHTML = 'Agents: ❌ Error';
+                });
+            }
+        }, 5000);
+    </script>
+
+    <!-- Service Worker for PWA -->
+    <script>
+        // Service Worker registration - commented out for development
+        /*
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('SW registered: ', registration);
+                    })
+                    .catch(registrationError => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+        }
+        */
+    </script>
+</body>
+
+</html>

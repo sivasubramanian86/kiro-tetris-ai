@@ -1,0 +1,456 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'KIRO Tetris AI - Multi-Agent Strands Architecture on AWS'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Environment name
+  
+  DomainName:
+    Type: String
+    Default: ''
+    Description: Custom domain name (optional)
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: nodejs18.x
+    Environment:
+      Variables:
+        NODE_ENV: !Ref Environment
+        AWS_REGION: !Ref AWS::Region
+        DYNAMODB_GAME_STATE_TABLE: !Ref GameStateTable
+        DYNAMODB_LEADERBOARD_TABLE: !Ref LeaderboardTable
+        S3_REPLAY_BUCKET: !Ref ReplayBucket
+        SECRETS_MANAGER_ARN: !Ref TetrisSecrets
+
+Resources:
+  # API Gateway
+  TetrisAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+      Auth:
+        DefaultAuthorizer: AWS_IAM
+      GatewayResponses:
+        DEFAULT_4XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+        DEFAULT_5XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+
+  # Lambda Functions
+  GameEngineFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'tetris-game-engine-${Environment}'
+      CodeUri: ../src/
+      Handler: lambda/game-engine.handler
+      Description: 'Tetris Game Engine Agent'
+      Events:
+        GameAPI:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TetrisAPI
+            Path: /api/game/{proxy+}
+            Method: ANY
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GameStateTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref LeaderboardTable
+        - S3CrudPolicy:
+            BucketName: !Ref ReplayBucket
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref TetrisSecrets
+
+  AIPredictorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'tetris-ai-predictor-${Environment}'
+      CodeUri: ../src/
+      Handler: lambda/ai-predictor.handler
+      Description: 'Tetris AI Predictor Agent'
+      MemorySize: 1024
+      Timeout: 60
+      Events:
+        AIAPI:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TetrisAPI
+            Path: /api/ai/{proxy+}
+            Method: ANY
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref TetrisSecrets
+
+  UIControllerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'tetris-ui-controller-${Environment}'
+      CodeUri: ../src/
+      Handler: lambda/ui-controller.handler
+      Description: 'Tetris UI Controller Agent'
+      Events:
+        UIAPI:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TetrisAPI
+            Path: /api/ui/{proxy+}
+            Method: ANY
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref AssetsBucket
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref TetrisSecrets
+
+  # DynamoDB Tables
+  GameStateTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'tetris-game-states-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: playerId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: playerId
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: KIRO-Tetris-AI
+
+  LeaderboardTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'tetris-leaderboard-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: playerId
+          AttributeType: S
+        - AttributeName: score
+          AttributeType: N
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: playerId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: ScoreIndex
+          KeySchema:
+            - AttributeName: score
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: KIRO-Tetris-AI
+
+  # S3 Buckets
+  ReplayBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'tetris-replays-${Environment}-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldReplays
+            Status: Enabled
+            ExpirationInDays: 90
+          - Id: TransitionToIA
+            Status: Enabled
+            TransitionInDays: 30
+            StorageClass: STANDARD_IA
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST, DELETE]
+            AllowedOrigins: ['*']
+            MaxAge: 3000
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: KIRO-Tetris-AI
+
+  AssetsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'tetris-assets-${Environment}-${AWS::AccountId}'
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET]
+            AllowedOrigins: ['*']
+            MaxAge: 86400
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: KIRO-Tetris-AI
+
+  # CloudFront Distribution
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub 'KIRO Tetris AI - ${Environment}'
+        DefaultRootObject: index.html
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt AssetsBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOAI}'
+          - Id: APIOrigin
+            DomainName: !Sub '${TetrisAPI}.execute-api.${AWS::Region}.amazonaws.com'
+            CustomOriginConfig:
+              HTTPPort: 443
+              OriginProtocolPolicy: https-only
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # Managed-CachingOptimized
+          OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf  # Managed-CORS-S3Origin
+        CacheBehaviors:
+          - PathPattern: '/api/*'
+            TargetOriginId: APIOrigin
+            ViewerProtocolPolicy: https-only
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad  # Managed-CachingDisabled
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac  # Managed-AllViewerExceptHostHeader
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: KIRO-Tetris-AI
+
+  CloudFrontOAI:
+    Type: AWS::CloudFront::OriginAccessIdentity
+    Properties:
+      OriginAccessIdentityConfig:
+        Comment: !Sub 'OAI for KIRO Tetris AI - ${Environment}'
+
+  # S3 Bucket Policy for CloudFront
+  AssetsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AssetsBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}'
+            Action: 's3:GetObject'
+            Resource: !Sub '${AssetsBucket}/*'
+
+  # Secrets Manager
+  TetrisSecrets:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'tetris-secrets-${Environment}'
+      Description: 'Secrets for KIRO Tetris AI application'
+      GenerateSecretString:
+        SecretStringTemplate: '{"jwt_secret": "placeholder"}'
+        GenerateStringKey: 'bedrock_api_key'
+        PasswordLength: 64
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: KIRO-Tetris-AI
+
+  # CloudWatch Log Groups
+  GameEngineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/tetris-game-engine-${Environment}'
+      RetentionInDays: 14
+
+  AIPredictorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/tetris-ai-predictor-${Environment}'
+      RetentionInDays: 14
+
+  UIControllerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/tetris-ui-controller-${Environment}'
+      RetentionInDays: 14
+
+  # IAM Role for Lambda Functions
+  TetrisLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'TetrisLambdaRole-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: TetrisAppPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt GameStateTable.Arn
+                  - !GetAtt LeaderboardTable.Arn
+                  - !Sub '${LeaderboardTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub '${ReplayBucket}/*'
+                  - !Sub '${AssetsBucket}/*'
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref TetrisSecrets
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: '*'
+
+  # CloudWatch Alarms
+  HighErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'TetrisHighErrorRate-${Environment}'
+      AlarmDescription: 'High error rate in Tetris Lambda functions'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  HighLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'TetrisHighLatency-${Environment}'
+      AlarmDescription: 'High latency in Tetris API'
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5000
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+Outputs:
+  APIGatewayURL:
+    Description: 'API Gateway endpoint URL'
+    Value: !Sub 'https://${TetrisAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-APIGatewayURL'
+
+  CloudFrontURL:
+    Description: 'CloudFront distribution URL'
+    Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudFrontURL'
+
+  GameStateTableName:
+    Description: 'DynamoDB Game State table name'
+    Value: !Ref GameStateTable
+    Export:
+      Name: !Sub '${AWS::StackName}-GameStateTable'
+
+  LeaderboardTableName:
+    Description: 'DynamoDB Leaderboard table name'
+    Value: !Ref LeaderboardTable
+    Export:
+      Name: !Sub '${AWS::StackName}-LeaderboardTable'
+
+  ReplayBucketName:
+    Description: 'S3 Replay bucket name'
+    Value: !Ref ReplayBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ReplayBucket'
+
+  AssetsBucketName:
+    Description: 'S3 Assets bucket name'
+    Value: !Ref AssetsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-AssetsBucket'
+
+  SecretsManagerArn:
+    Description: 'Secrets Manager ARN'
+    Value: !Ref TetrisSecrets
+    Export:
+      Name: !Sub '${AWS::StackName}-SecretsArn'
