@@ -66,6 +66,9 @@ cd kiro-tetris-ai
 # Install dependencies
 npm install
 
+# Build the browser bundle
+npm run build
+
 # Copy environment configuration
 cp config/secrets/.env.aws.example .env.aws
 cp config/secrets/.env.gcp.example .env.gcp
@@ -299,7 +302,7 @@ const features = {
 ## 📚 Documentation
 
 - [Architecture Guide](docs/ARCHITECTURE.md)
-- [Security Documentation](docs/SECURITY.md)
+- [Security Documentation](SECURITY.md)
 - [Deployment Guide](docs/DEPLOYMENT.md)
 - [API Reference](docs/API.md)
 - [KIRO Blog Post](docs/kiro-blog-post.md)
@@ -319,7 +322,7 @@ const features = {
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE.md](LICENSE.md) file for details.
 
 ## 🏆 KIRO Challenge
 
