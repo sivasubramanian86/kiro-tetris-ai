@@ -1,0 +1,22 @@
+{
+    "version": 2,
+    "name": "kiro-tetris-ai",
+    "builds": [
+        {
+            "src": "package.json",
+            "use": "@vercel/static-build",
+            "config": {
+                "distDir": "public"
+            }
+        }
+    ],
+    "rewrites": [
+        {
+            "source": "/(.*)",
+            "destination": "/index.html"
+        }
+    ],
+    "github": {
+        "silent": true
+    }
+}

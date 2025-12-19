@@ -11,34 +11,34 @@ class TetrisOrchestrator extends Orchestrator {
       name: 'Tetris Game Orchestrator',
       ...config
     });
-    
+
     this.config = config;
-    
+
     this.agents = new Map();
     this.messageQueue = [];
     this.circuitBreakers = new Map();
     this.performanceMetrics = new Map();
     this.gameLoop = null;
     this.isRunning = false;
-    
+
     this.setupMessageRouting();
     this.setupCircuitBreakers();
   }
 
   async initialize() {
     await super.initialize();
-    
+
     this.logger.info('Tetris Orchestrator initializing...');
-    
+
     // Initialize and register agents
     await this.initializeAgents();
-    
+
     // Setup inter-agent communication
     await this.setupCommunication();
-    
+
     // Start monitoring
     this.startHealthMonitoring();
-    
+
     this.logger.info('Tetris Orchestrator initialized successfully');
   }
 
@@ -51,7 +51,7 @@ class TetrisOrchestrator extends Orchestrator {
       });
       await gameEngine.initialize();
       this.agents.set('game-engine', gameEngine);
-      
+
       // Initialize AI Predictor Agent
       const aiPredictor = new AIPredictorAgent({
         orchestratorId: this.id,
@@ -59,7 +59,7 @@ class TetrisOrchestrator extends Orchestrator {
       });
       await aiPredictor.initialize();
       this.agents.set('ai-predictor', aiPredictor);
-      
+
       // Initialize UI Controller Agent (only in browser)
       if (typeof window !== 'undefined') {
         const uiController = new UIControllerAgent({
@@ -69,7 +69,7 @@ class TetrisOrchestrator extends Orchestrator {
         await uiController.initialize();
         this.agents.set('ui-controller', uiController);
       }
-      
+
       this.logger.info('All agents initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize agents:', error);
@@ -83,13 +83,13 @@ class TetrisOrchestrator extends Orchestrator {
       type: 'SUBSCRIBE_STATE_UPDATES',
       payload: { agentId: 'ui-controller' }
     });
-    
+
     // Subscribe AI Predictor to Game Engine state updates
     await this.routeMessage('ai-predictor', 'game-engine', {
       type: 'SUBSCRIBE_STATE_UPDATES',
       payload: { agentId: 'ai-predictor' }
     });
-    
+
     this.logger.info('Inter-agent communication setup complete');
   }
 
@@ -103,18 +103,18 @@ class TetrisOrchestrator extends Orchestrator {
       'MOVE_PIECE': 'game-engine',
       'ROTATE_PIECE': 'game-engine',
       'DROP_PIECE': 'game-engine',
-      
+
       // AI prediction messages go to AI Predictor
       'PREDICT_BEST_MOVE': 'ai-predictor',
       'ANALYZE_BOARD': 'ai-predictor',
       'SET_DIFFICULTY': 'ai-predictor',
-      
+
       // UI messages go to UI Controller
       'RENDER_FRAME': 'ui-controller',
       'SET_THEME': 'ui-controller',
       'SHOW_DIALOG': 'ui-controller',
       'ANIMATE_LINE_CLEAR': 'ui-controller',
-      
+
       // Input events are processed by orchestrator first
       'INPUT_EVENT': 'orchestrator'
     };
@@ -127,7 +127,7 @@ class TetrisOrchestrator extends Orchestrator {
       timeout: 30000,      // 30 seconds
       monitoringPeriod: 60000  // 1 minute
     };
-    
+
     for (const agentId of ['game-engine', 'ai-predictor', 'ui-controller']) {
       this.circuitBreakers.set(agentId, {
         ...circuitBreakerConfig,
@@ -141,13 +141,13 @@ class TetrisOrchestrator extends Orchestrator {
 
   async routeMessage(fromAgent, toAgent, message) {
     const startTime = performance.now();
-    
+
     try {
       // Check circuit breaker
       if (!this.isCircuitClosed(toAgent)) {
         throw new Error(`Circuit breaker open for agent: ${toAgent}`);
       }
-      
+
       // Add routing metadata
       const routedMessage = {
         ...message,
@@ -158,32 +158,32 @@ class TetrisOrchestrator extends Orchestrator {
           routingId: this.generateRoutingId()
         }
       };
-      
+
       // Get target agent
       const targetAgent = this.agents.get(toAgent);
       if (!targetAgent) {
         throw new Error(`Agent not found: ${toAgent}`);
       }
-      
+
       // Route the message
       const response = await targetAgent.handleMessage(routedMessage);
-      
+
       // Record success
       this.recordSuccess(toAgent);
-      
+
       const latency = performance.now() - startTime;
       this.recordMetric('message_latency', latency, { fromAgent, toAgent });
-      
+
       // Log slow messages
       if (latency > 10) {
         this.logger.warn(`Slow message routing: ${fromAgent} → ${toAgent}: ${latency.toFixed(2)}ms`);
       }
-      
+
       return response;
     } catch (error) {
       this.recordFailure(toAgent, error);
       this.logger.error(`Message routing failed: ${fromAgent} → ${toAgent}:`, error);
-      
+
       // Attempt graceful degradation
       return this.handleRoutingFailure(fromAgent, toAgent, message, error);
     }
@@ -192,7 +192,7 @@ class TetrisOrchestrator extends Orchestrator {
   async handleInputEvent(inputEvent) {
     try {
       const { inputType, key, x, y } = inputEvent.payload;
-      
+
       // Process input based on type
       if (inputType === 'keyboard') {
         return this.handleKeyboardInput(key);
@@ -201,7 +201,7 @@ class TetrisOrchestrator extends Orchestrator {
       } else if (inputType === 'touch') {
         return this.handleTouchInput(x, y);
       }
-      
+
       return { success: false, error: 'Unknown input type' };
     } catch (error) {
       this.logger.error('Failed to handle input event:', error);
@@ -221,7 +221,7 @@ class TetrisOrchestrator extends Orchestrator {
       'p': { type: 'PAUSE_GAME', payload: {} },
       'r': { type: 'RESTART_GAME', payload: {} }
     };
-    
+
     const action = keyMappings[key];
     if (action) {
       // Route to appropriate agent
@@ -230,7 +230,7 @@ class TetrisOrchestrator extends Orchestrator {
         return this.routeMessage('orchestrator', targetAgent, action);
       }
     }
-    
+
     return { success: false, error: 'Unmapped key' };
   }
 
@@ -249,32 +249,36 @@ class TetrisOrchestrator extends Orchestrator {
     return this.handleMouseInput(x, y);
   }
 
-  async startGame() {
+  async startGame(options = {}) {
     try {
       this.logger.info('Starting new game...');
-      
+
+      const { skipLoop = false } = options;
+
       // Start game engine
       const gameResult = await this.routeMessage('orchestrator', 'game-engine', {
         type: 'START_GAME',
         payload: {}
       });
-      
+
       if (!gameResult.success) {
         throw new Error('Failed to start game engine');
       }
-      
+
       // Initialize UI
       await this.routeMessage('orchestrator', 'ui-controller', {
         type: 'RENDER_FRAME',
         payload: { gameState: gameResult.gameState, forceRender: true }
       });
-      
-      // Start game loop
-      this.startGameLoop();
-      
-      this.isRunning = true;
+
+      // Start game loop if not skipped
+      if (!skipLoop) {
+        this.startGameLoop();
+        this.isRunning = true;
+      }
+
       this.logger.info('Game started successfully');
-      
+
       return { success: true };
     } catch (error) {
       this.logger.error('Failed to start game:', error);
@@ -284,33 +288,33 @@ class TetrisOrchestrator extends Orchestrator {
 
   startGameLoop() {
     let lastTime = performance.now();
-    
+
     const gameLoop = async (currentTime) => {
       if (!this.isRunning) return;
-      
+
       const deltaTime = currentTime - lastTime;
       lastTime = currentTime;
-      
+
       try {
         // Update game engine
         const gameEngine = this.agents.get('game-engine');
         if (gameEngine) {
           await gameEngine.update(deltaTime);
         }
-        
+
         // Get current game state
         const stateResult = await this.routeMessage('orchestrator', 'game-engine', {
           type: 'GET_GAME_STATE',
           payload: {}
         });
-        
+
         if (stateResult.success) {
           // Update UI
           await this.routeMessage('orchestrator', 'ui-controller', {
             type: 'RENDER_FRAME',
             payload: { gameState: stateResult.gameState }
           });
-          
+
           // Get AI suggestion if needed
           if (stateResult.gameState.currentPiece && Math.random() < 0.1) { // 10% chance
             this.getAISuggestion(stateResult.gameState);
@@ -319,11 +323,11 @@ class TetrisOrchestrator extends Orchestrator {
       } catch (error) {
         this.logger.error('Game loop error:', error);
       }
-      
+
       // Continue loop
       this.gameLoop = requestAnimationFrame(gameLoop);
     };
-    
+
     this.gameLoop = requestAnimationFrame(gameLoop);
   }
 
@@ -337,7 +341,7 @@ class TetrisOrchestrator extends Orchestrator {
           nextPieces: gameState.nextPieces
         }
       });
-      
+
       if (prediction.success) {
         // Display AI suggestion in UI
         await this.routeMessage('orchestrator', 'ui-controller', {
@@ -352,19 +356,19 @@ class TetrisOrchestrator extends Orchestrator {
 
   stopGame() {
     this.isRunning = false;
-    
+
     if (this.gameLoop) {
       cancelAnimationFrame(this.gameLoop);
       this.gameLoop = null;
     }
-    
+
     this.logger.info('Game stopped');
   }
 
   isCircuitClosed(agentId) {
     const breaker = this.circuitBreakers.get(agentId);
     if (!breaker) return true;
-    
+
     if (breaker.state === 'OPEN') {
       if (Date.now() > breaker.nextAttempt) {
         breaker.state = 'HALF_OPEN';
@@ -373,7 +377,7 @@ class TetrisOrchestrator extends Orchestrator {
         return false;
       }
     }
-    
+
     return true;
   }
 
@@ -393,7 +397,7 @@ class TetrisOrchestrator extends Orchestrator {
     if (breaker) {
       breaker.failures++;
       breaker.lastFailure = Date.now();
-      
+
       if (breaker.failures >= breaker.threshold) {
         breaker.state = 'OPEN';
         breaker.nextAttempt = Date.now() + breaker.timeout;
@@ -404,7 +408,7 @@ class TetrisOrchestrator extends Orchestrator {
 
   async handleRoutingFailure(fromAgent, toAgent, message, error) {
     // Implement graceful degradation strategies
-    
+
     if (toAgent === 'ai-predictor') {
       // AI failures are non-critical, return empty prediction
       return {
@@ -413,7 +417,7 @@ class TetrisOrchestrator extends Orchestrator {
         fallback: true
       };
     }
-    
+
     if (toAgent === 'ui-controller') {
       // UI failures are serious but not game-breaking
       this.logger.error('UI Controller unavailable, game continues without rendering');
@@ -423,7 +427,7 @@ class TetrisOrchestrator extends Orchestrator {
         fallback: true
       };
     }
-    
+
     if (toAgent === 'game-engine') {
       // Game engine failures are critical
       this.logger.error('Game Engine unavailable, stopping game');
@@ -434,7 +438,7 @@ class TetrisOrchestrator extends Orchestrator {
         critical: true
       };
     }
-    
+
     return {
       success: false,
       error: error.message
@@ -443,17 +447,17 @@ class TetrisOrchestrator extends Orchestrator {
 
   recordMetric(name, value, tags = {}) {
     const key = `${name}:${JSON.stringify(tags)}`;
-    
+
     if (!this.performanceMetrics.has(key)) {
       this.performanceMetrics.set(key, []);
     }
-    
+
     const metrics = this.performanceMetrics.get(key);
     metrics.push({
       value,
       timestamp: Date.now()
     });
-    
+
     // Keep only recent metrics
     if (metrics.length > 1000) {
       metrics.splice(0, 500);
@@ -472,12 +476,12 @@ class TetrisOrchestrator extends Orchestrator {
 
   async performHealthChecks() {
     const healthResults = {};
-    
+
     for (const [agentId, agent] of this.agents) {
       try {
         const health = await agent.healthCheck();
         healthResults[agentId] = health;
-        
+
         if (health.status !== 'healthy') {
           this.logger.warn(`Agent ${agentId} health check failed:`, health);
         }
@@ -489,16 +493,16 @@ class TetrisOrchestrator extends Orchestrator {
         this.logger.error(`Health check failed for ${agentId}:`, error);
       }
     }
-    
+
     // Log overall system health
     const unhealthyAgents = Object.entries(healthResults)
       .filter(([_, health]) => health.status !== 'healthy')
       .map(([agentId, _]) => agentId);
-    
+
     if (unhealthyAgents.length > 0) {
       this.logger.warn(`Unhealthy agents detected: ${unhealthyAgents.join(', ')}`);
     }
-    
+
     return healthResults;
   }
 
@@ -509,14 +513,14 @@ class TetrisOrchestrator extends Orchestrator {
       circuitBreakers: {},
       metrics: {}
     };
-    
+
     // Agent health
     for (const [agentId, agent] of this.agents) {
       report.agents[agentId] = {
         status: 'unknown' // Would be filled by health check
       };
     }
-    
+
     // Circuit breaker status
     for (const [agentId, breaker] of this.circuitBreakers) {
       report.circuitBreakers[agentId] = {
@@ -525,11 +529,11 @@ class TetrisOrchestrator extends Orchestrator {
         lastFailure: breaker.lastFailure
       };
     }
-    
+
     // Performance metrics
     for (const [key, values] of this.performanceMetrics) {
       const recentValues = values.slice(-100).map(v => v.value);
-      
+
       if (recentValues.length > 0) {
         report.metrics[key] = {
           count: recentValues.length,
@@ -540,7 +544,7 @@ class TetrisOrchestrator extends Orchestrator {
         };
       }
     }
-    
+
     return report;
   }
 
@@ -552,10 +556,10 @@ class TetrisOrchestrator extends Orchestrator {
 
   async shutdown() {
     this.logger.info('Shutting down Tetris Orchestrator...');
-    
+
     // Stop game loop
     this.stopGame();
-    
+
     // Shutdown all agents
     for (const [agentId, agent] of this.agents) {
       try {
@@ -565,14 +569,14 @@ class TetrisOrchestrator extends Orchestrator {
         this.logger.error(`Failed to shutdown agent ${agentId}:`, error);
       }
     }
-    
+
     // Clear resources
     this.agents.clear();
     this.circuitBreakers.clear();
     this.performanceMetrics.clear();
-    
+
     await super.shutdown();
-    
+
     this.logger.info('Tetris Orchestrator shut down complete');
   }
 }

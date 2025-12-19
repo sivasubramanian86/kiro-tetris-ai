@@ -94,6 +94,7 @@ class GameController {
       this.gameEngine.gameState = 'paused';
       this.isRunning = false;
       if (pauseBtn) pauseBtn.textContent = 'Resume';
+      this.render(); // Ensure paused state is rendered (showing overlay)
     } else if (this.gameEngine.gameState === 'paused') {
       this.gameEngine.gameState = 'playing';
       this.isRunning = true;

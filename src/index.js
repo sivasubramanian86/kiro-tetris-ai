@@ -369,7 +369,12 @@ class TetrisApp {
     }
 
     try {
-      await this.orchestrator.startGame();
+      // Stop any existing orchestrator loop
+      if (this.orchestrator) {
+        this.orchestrator.stopGame();
+      }
+
+      await this.orchestrator.startGame({ skipLoop: typeof window !== 'undefined' });
 
       if (this.gameController) {
         this.gameController.start();
@@ -379,6 +384,16 @@ class TetrisApp {
     } catch (error) {
       console.error('❌ Failed to start game:', error);
       throw error;
+    }
+  }
+
+  async restart() {
+    if (this.gameController) {
+      // Hide dialog first
+      const dialog = document.getElementById('gameOverDialog');
+      if (dialog) dialog.style.display = 'none';
+
+      this.gameController.restart();
     }
   }
 
